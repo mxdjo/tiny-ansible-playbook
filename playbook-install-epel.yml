@@ -1,0 +1,57 @@
+---
+- hosts: dev
+  become: yes
+  tasks:
+
+  - name: Enable Epel
+    command: yum-config-manager --enable epel
+
+  - name: Install mariadb and php7.2
+    command: amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+
+  - name: Install mariadb and php7.2
+    yum:
+      name: "{{ packages }}"
+    vars:
+      packages:
+        - httpd
+        - mariadb-server
+  
+  - name: Add the user ec2-user to apache group
+    ansible.builtin.user:
+      name: ec2-user
+      groups: apache
+      append: yes
+  
+  - name: Change file ownership, group and permissions
+    ansible.builtin.file:
+      path: /var/www
+      owner: ec2-user
+      group: apache
+      state: directory
+      mode: '0644'
+
+  - name: Ensure directories are 2755
+    ansible.builtin.command: find /var/www -type d -exec chmod -c 2755 {} \;
+    register: chmod_result
+    changed_when: "chmod_result.stdout != \"\""
+
+  - name: Ensure files are 0644
+    ansible.builtin.command: find /var/www -type f -exec chmod -c 0644 {} \;
+    register: chmod_result
+    changed_when: "chmod_result.stdout != \"\""
+
+  - name: Start service httpd, if not started
+    ansible.builtin.service:
+      name: "{{ item }}"
+      state: started
+    with_items:
+       - httpd
+       - mariadb
+       - php-fpm
+
+  - name: Creating file echo
+    ansible.builtin.copy:
+      dest: "/var/www/html/phpinfo.php"
+      content: | 
+                "<?php phpinfo(); ?>"
